@@ -4,7 +4,7 @@ model:
     structure: 'shallow'
 test:
     compute_train_acc: True
-    do_after_ep: 5           # non-eager mode
+    do_after_ep: 1           # non-eager mode
 ctmnet:
     pred_source: 'score'
     dnet: True
