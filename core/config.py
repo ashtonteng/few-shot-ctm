@@ -140,7 +140,7 @@ class Config(object):
     misc = AttrDict()
     misc.manual_seed = -1
     misc.vis = AttrDict()
-    misc.vis.use = True
+    misc.vis.use = False
     misc.vis.method = 'visdom'
     # must be passed from configs on different servers
     # update: by default we use q5 node
