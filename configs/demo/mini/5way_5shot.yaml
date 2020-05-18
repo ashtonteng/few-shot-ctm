@@ -22,6 +22,6 @@ train:
     nep: 50
     lr_scheduler: [200, 300, 350]
 ctrl:
-    method: 'all_new'   # keep it in all new experiments
+    method: '5way_5shot'   # keep it in all new experiments
     eager: 0
     note: 'config file: {:s}'
