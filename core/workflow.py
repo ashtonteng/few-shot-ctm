@@ -151,7 +151,7 @@ def test_model_pretrain(net, input_db, eval_length, opts):
     return accuracy
 
 
-def run_test(opts, val_db, net, vis, **args):
+def run_test(opts, val_db, net, vis=None, **args):
     step = args['step']
     epoch = args['epoch']
     eval_length = args['eval_length']

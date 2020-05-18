@@ -200,9 +200,13 @@ def main():
                     'meta_test': meta_test
                 }
                 try:
-                    stats = run_test(opts, val_db, net, vis, **arguments)
+                    if opts.misc.vis.use and opts.misc.vis.method == 'visdom':
+                        stats = run_test(opts, val_db, net, vis, **arguments)
+                    else:
+                        stats = run_test(opts, val_db, net, None, **arguments)
                 except RuntimeError:
-                    vis.show_dynamic_info(phase='error')
+                    if opts.misc.vis.use and opts.misc.vis.method == 'visdom':
+                        vis.show_dynamic_info(phase='error')
                 if sum(stats) != -1:
                     best_accuracy, last_epoch, last_iter = stats[0], stats[1], stats[2]
             # DONE with validation process
