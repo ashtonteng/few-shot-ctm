@@ -144,7 +144,7 @@ class Config(object):
     misc.vis.method = 'visdom'
     # must be passed from configs on different servers
     # update: by default we use q5 node
-    misc.vis.port = 2015
+    misc.vis.port = 8080
     misc.vis.loss_legend = ['loss']
     misc.vis.line = 100
     misc.vis.txt = 200

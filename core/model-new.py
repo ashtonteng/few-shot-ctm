@@ -342,7 +342,10 @@ class CTMNet(nn.Module):
                     )
                 else:
                     print("-----------------PROJECTOR-----------------")
-                    self.projection = self._make_layer(Bottleneck, out_size, 4, stride=1, name="projector")
+                    tmp_inplaces = self.inplanes
+                    self.projection1 = self._make_layer(Bottleneck, out_size, 4, stride=1, name="projector1")
+                    self.inplanes = tmp_inplaces
+                    self.projection2 = self._make_layer(Bottleneck, out_size, 4, stride=1, name="projector2")
 
                 # deprecated; kept for legacy
                 if self.use_discri_loss:
@@ -637,7 +640,17 @@ class CTMNet(nn.Module):
                 _input_P = support_xf_ori.view(1, -1, support_xf_ori.size(2), support_xf_ori.size(3))
 
             # for P: consider all components
-            P = self.projection(_input_P)                                   # 1, 64, 3, 3
+            ###############################
+            # P = self.projection(_input_P)                                   # 1, 64, 3, 3
+
+            P1 = self.projection1(_input_P)
+            P2 = self.projection2(_input_P)
+
+            if torch.sum(P1) > torch.sum(P2):
+                P = P1
+            else:
+                P = P2
+            ###############################
             P = F.softmax(P, dim=1)
             if self.dnet_supp_manner == '2' or self.dnet_supp_manner == '3' or self.use_discri_loss:
                 mp_modified = torch.matmul(mp, P)                           # 5, 64, 3, 3
@@ -805,7 +818,7 @@ class CTMNet(nn.Module):
                 # mp = self.main_component(support_xf_reshape)  # 5(n_way), 64, 3, 3
 
 
-                    ###################
+                ###################
 
                 ## mp = main component, concentrator
                 mp1 = self.main_component1(support_xf_reshape)                # 5(n_way), 64, 3, 3
@@ -816,7 +829,7 @@ class CTMNet(nn.Module):
                 else:
                     mp = mp2
 
-                    ####################
+                ####################
 
 
                 if self.mp_mean:
@@ -826,7 +839,18 @@ class CTMNet(nn.Module):
                 _input_P = support_xf_ori.view(1, -1, support_xf_ori.size(2), support_xf_ori.size(3))
 
             # for P: consider all components
-            P = self.projection(_input_P)  # 1, 64, 3, 3
+            ###############################
+            # P = self.projection(_input_P)                                   # 1, 64, 3, 3
+
+            P1 = self.projection1(_input_P)
+            P2 = self.projection2(_input_P)
+
+            if torch.sum(P1) > torch.sum(P2):
+                P = P1
+            else:
+                P = P2
+            ###############################
+
             P = F.softmax(P, dim=1)
             mp_modified = torch.matmul(mp, P)  # 5, 64, 3, 3
 
