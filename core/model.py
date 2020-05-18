@@ -78,7 +78,9 @@ class MyLinear(nn.Module):
 class Bottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, name=None):
+        print("Bottleneck init")
+
         super(Bottleneck, self).__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
@@ -91,8 +93,13 @@ class Bottleneck(nn.Module):
         self.downsample = downsample
         self.stride = stride
 
+        self.name = name
+
     def forward(self, x):
+
         residual = x
+
+        # print("self.name", self.name, "residual.size()", residual.size())
 
         out = self.conv1(x)
         out = self.bn1(out)
@@ -246,6 +253,7 @@ class CTMNet(nn.Module):
         _logger('Building up models ...')
         # feature extractor
         in_c = 1 if opts.dataset.name == 'omniglot' else 3
+        print("-----------------CNN ENCODER-----------------")
         self.repnet = feat_extract(
             self.opts.model.resnet_pretrain,
             opts=opts, structure=opts.model.structure, in_c=in_c)
@@ -293,12 +301,13 @@ class CTMNet(nn.Module):
                         self._make_layer(Bottleneck, out_size, 2, stride=1)
                     )
                 else:
-                    self.reshaper = self._make_layer(Bottleneck, out_size, 4, stride=1)
+                    print("-----------------RESHAPER-----------------")
+                    self.reshaper = self._make_layer(Bottleneck, out_size, 4, stride=1, name="reshaper")
                 _out_downsample = self.reshaper(_embedding)
 
             # CONCENTRATOR AND PROJECTOR
             if self.dnet:
-                if self.mp_mean:
+                if self.mp_mean: ## mp = main_component
                     self.inplanes = _embedding.size(1)
                 else:
                     # concatenate along the channel for all samples in each class
@@ -309,11 +318,16 @@ class CTMNet(nn.Module):
                         self._make_layer(Bottleneck, out_size, 2, stride=1)
                     )
                 else:
-                    self.main_component = self._make_layer(Bottleneck, out_size, 4, stride=1)
+                    print("-----------------CONCENTRATOR-----------------")
+                    tmp_inplaces = self.inplanes
+                    self.main_component1 = self._make_layer(Bottleneck, out_size, 4, stride=1, name="concentrator2", change_inplanes=True)
+                    self.inplanes = tmp_inplaces
+                    self.main_component2 = self._make_layer(Bottleneck, out_size, 4, stride=1, name="concentrator1", change_inplanes=True)
+
 
                 # projector
-                if self.delete_mp:
-                    assert self.opts.fsl.k_shot[0] == 1
+                if self.delete_mp: ## mp = main_component
+                    assert self.opts.fsl.k_shot[0] == 1   ## of k=1 one shot learning, dont need concentrator
                     del self.main_component
                     # input_c for Projector, no mp
                     self.inplanes = self.opts.fsl.n_way[0]*_embedding.size(1)
@@ -327,7 +341,8 @@ class CTMNet(nn.Module):
                         self._make_layer(Bottleneck, out_size, 2, stride=1)
                     )
                 else:
-                    self.projection = self._make_layer(Bottleneck, out_size, 4, stride=1)
+                    print("-----------------PROJECTOR-----------------")
+                    self.projection = self._make_layer(Bottleneck, out_size, 4, stride=1, name="projector")
 
                 # deprecated; kept for legacy
                 if self.use_discri_loss:
@@ -459,20 +474,23 @@ class CTMNet(nn.Module):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
 
-    def _make_layer(self, block, planes, blocks, stride=1):
+    def _make_layer(self, block, planes, blocks, stride=1, name=None, change_inplanes=True):
         downsample = None
-        if stride != 1 or self.inplanes != planes * block.expansion:
+        if stride != 1 or self.inplanes != planes * block.expansion: ## block.expansion = 4
             downsample = nn.Sequential(
                 nn.Conv2d(self.inplanes, planes * block.expansion,
                           kernel_size=1, stride=stride, bias=False),
                 nn.BatchNorm2d(planes * block.expansion),
             )
         layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample))
-        self.inplanes = planes * block.expansion
+        layers.append(block(self.inplanes, planes, stride, downsample, name=name))
+        if change_inplanes:
+            self.inplanes = planes * block.expansion
         for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes))
+            print(type(block), "BLOCKTYPEPEPPEPEPEPE")
+            layers.append(block(self.inplanes, planes, name=name))
 
+        print("hiiiii", name, layers)
         return nn.Sequential(*layers)
 
     # decprecated in CTM; kept here for ablation study
@@ -599,7 +617,19 @@ class CTMNet(nn.Module):
                     support_xf_reshape = support_xf_ori.view(n_way, -1, support_xf_ori.size(2), support_xf_ori.size(3))
                 else:
                     support_xf_reshape = support_xf_ori
-                mp = self.main_component(support_xf_reshape)                # 5(n_way), 64, 3, 3
+
+                    ###################
+
+                ## mp = main component, concentrator
+                mp1 = self.main_component1(support_xf_reshape)                # 5(n_way), 64, 3, 3
+                mp2 = self.main_component2(support_xf_reshape)
+
+                if torch.sum(mp1) > torch.sum(mp2):
+                    mp = mp1
+                else:
+                    mp = mp2
+                    ####################
+
                 if self.mp_mean:
                     mp = torch.mean(mp.view(n_way, k_shot, mp.size(1), mp.size(2), mp.size(2)), dim=1, keepdim=False)
                 _input_P = mp.view(1, -1, mp.size(2), mp.size(3))           # mp -> 1, 5*64, 3, 3
@@ -630,12 +660,12 @@ class CTMNet(nn.Module):
                 v = support_xf_ori
                 query = query_xf_ori
             elif self.baseline_manner.startswith('sample_wise'):
-                if self.baseline_manner == 'sample_wise_similar':
+                if self.baseline_manner == 'sample_wise_similar': ## MatchingNet
                     support_xf_ori = self.additional_repnet(support_xf_ori)
                     query_xf_ori = self.additional_repnet(query_xf_ori)
                 v = self.reshaper(support_xf_ori)
                 query = self.reshaper(query_xf_ori)
-            elif self.baseline_manner == 'sum':
+            elif self.baseline_manner == 'sum': ##ProtoNet
                 v = self.reshaper(support_xf_ori)
                 v = v.view(n_way, -1, v.size(1), v.size(2), v.size(2)).sum(1, keepdim=False)
                 query = self.reshaper(query_xf_ori)
@@ -772,7 +802,23 @@ class CTMNet(nn.Module):
                     support_xf_reshape = support_xf_ori.view(n_way, -1, support_xf_ori.size(2), support_xf_ori.size(3))
                 else:
                     support_xf_reshape = support_xf_ori
-                mp = self.main_component(support_xf_reshape)  # 5(n_way), 64, 3, 3
+                # mp = self.main_component(support_xf_reshape)  # 5(n_way), 64, 3, 3
+
+
+                    ###################
+
+                ## mp = main component, concentrator
+                mp1 = self.main_component1(support_xf_reshape)                # 5(n_way), 64, 3, 3
+                mp2 = self.main_component2(support_xf_reshape)
+
+                if torch.sum(mp1) > torch.sum(mp2):
+                    mp = mp1
+                else:
+                    mp = mp2
+
+                    ####################
+
+
                 if self.mp_mean:
                     mp = torch.mean(mp.view(n_way, k_shot, mp.size(1), mp.size(2), mp.size(2)), dim=1, keepdim=False)
                 _input_P = mp.view(1, -1, mp.size(2), mp.size(3))  # mp -> 1, 5*64, 3, 3
