@@ -319,9 +319,9 @@ class CTMNet(nn.Module):
                     )
                 else:
                     print("-----------------CONCENTRATOR-----------------")
-                    tmp_inplaces = self.inplanes
+                    tmp_inplanes = self.inplanes
                     self.main_component1 = self._make_layer(Bottleneck, out_size, 4, stride=1, name="concentrator2", change_inplanes=True)
-                    self.inplanes = tmp_inplaces
+                    self.inplanes = tmp_inplanes
                     self.main_component2 = self._make_layer(Bottleneck, out_size, 4, stride=1, name="concentrator1", change_inplanes=True)
 
 
@@ -342,9 +342,9 @@ class CTMNet(nn.Module):
                     )
                 else:
                     print("-----------------PROJECTOR-----------------")
-                    tmp_inplaces = self.inplanes
+                    tmp_inplanes = self.inplanes
                     self.projection1 = self._make_layer(Bottleneck, out_size, 4, stride=1, name="projector1")
-                    self.inplanes = tmp_inplaces
+                    self.inplanes = tmp_inplanes
                     self.projection2 = self._make_layer(Bottleneck, out_size, 4, stride=1, name="projector2")
 
                 # deprecated; kept for legacy
@@ -615,36 +615,35 @@ class CTMNet(nn.Module):
         query_xf_ori = self.repnet(query_x.view(batch_sz*query_sz, -1, _d, _d))
 
         if self.dnet:
-            if not self.delete_mp:
+            if not self.delete_mp: ## use concentrator
                 if not self.mp_mean:
                     support_xf_reshape = support_xf_ori.view(n_way, -1, support_xf_ori.size(2), support_xf_ori.size(3))
                 else:
                     support_xf_reshape = support_xf_ori
 
-                    ###################
+                ###################
 
                 ## mp = main component, concentrator
                 mp1 = self.main_component1(support_xf_reshape)                # 5(n_way), 64, 3, 3
                 mp2 = self.main_component2(support_xf_reshape)
 
-                if torch.sum(mp1) > torch.sum(mp2):
-                    mp = mp1
-                else:
-                    mp = mp2
-                    ####################
-
                 if self.mp_mean:
-                    mp = torch.mean(mp.view(n_way, k_shot, mp.size(1), mp.size(2), mp.size(2)), dim=1, keepdim=False)
-                _input_P = mp.view(1, -1, mp.size(2), mp.size(3))           # mp -> 1, 5*64, 3, 3
-            else:
+                    mp1 = torch.mean(mp1.view(n_way, k_shot, mp1.size(1), mp1.size(2), mp1.size(2)), dim=1, keepdim=False)
+                    mp2 = torch.mean(mp2.view(n_way, k_shot, mp2.size(1), mp2.size(2), mp2.size(2)), dim=1, keepdim=False)
+
+                _input_P1 = mp1.view(1, -1, mp1.size(2), mp1.size(3))           # mp -> 1, 5*64, 3, 3
+                _input_P2 = mp2.view(1, -1, mp2.size(2), mp2.size(3))  # mp -> 1, 5*64, 3, 3
+                ####################
+
+            else: ## not run
                 _input_P = support_xf_ori.view(1, -1, support_xf_ori.size(2), support_xf_ori.size(3))
 
             # for P: consider all components
             ###############################
             # P = self.projection(_input_P)                                   # 1, 64, 3, 3
 
-            P1 = self.projection1(_input_P)
-            P2 = self.projection2(_input_P)
+            P1 = self.projection1(_input_P1)
+            P2 = self.projection2(_input_P2)
 
             if torch.sum(P1) > torch.sum(P2):
                 P = P1

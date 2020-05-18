@@ -3,7 +3,7 @@ import argparse
 from torch import optim
 from torch.optim.lr_scheduler import MultiStepLR, ExponentialLR, StepLR
 
-from core.model import CTMNet
+from core.model_combined import CTMNet
 from dataset.data_loader import data_loader
 from tools.general_utils import *
 from tools.visualize import Visualizer
