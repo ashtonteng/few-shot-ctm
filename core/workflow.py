@@ -47,7 +47,7 @@ def test_model(net, input_db, eval_length, opts, which_ind, curr_shot, optimizer
     meta_test is for using the dataloader in the original relation codebase. Not the same meaning as "meta_learn"
     """
     total_correct, total_num, display_onebatch = \
-        torch.zeros(1).to('cuda'), torch.zeros(1).to('cuda'), False
+        torch.zeros(1).to(opts.ctrl.device), torch.zeros(1).to(opts.ctrl.device), False
 
     if opts.ctrl.method == 'meta_learn':
 
