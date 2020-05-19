@@ -34,6 +34,7 @@ def main():
 
     # MODEL
     # NOTE: we use cpu mode for demo; change to gpu for experiments
+    print("using device:", opts.ctrl.device)
     net = CTMNet(opts).to(opts.ctrl.device)
 
     net_summary, param_num = model_summarize(net)
