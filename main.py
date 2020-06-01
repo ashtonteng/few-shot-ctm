@@ -175,9 +175,11 @@ def main():
                 if step % 1000*opts.io.iter_vis_loss == 0 or step == total_iter - 1:
                     opts.logger(opts.io.time_vis_str.format(left_time[0], left_time[1], left_time[2]))
 
-            # VALIDATION and SAVE BEST MODEL
-            if epoch > opts.test.do_after_ep and \
-                    ((step % opts.io.iter_do_val == 0 and step > 0) or step == total_iter - 1):
+            if True:
+
+            # # VALIDATION and SAVE BEST MODEL
+            # if epoch > opts.test.do_after_ep and \
+            #         ((step % opts.io.iter_do_val == 0 and step > 0) or step == total_iter - 1):
 
                 # execute once only
                 if RESET_BEST_ACC and opts.fsl.evolution and epoch >= opts.fsl.epoch_schedule[-1]:
