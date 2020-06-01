@@ -1,22 +1,24 @@
-import time
 import argparse
 from torch import optim
-from torch.optim.lr_scheduler import MultiStepLR, ExponentialLR, StepLR
 
-from core.model_combined import CTMNet
+from core.model_conc import CTMNet
 from dataset.data_loader import data_loader
 from tools.general_utils import *
-from tools.visualize import Visualizer
 from core.workflow import *
 from core.config import Config
 
+import pickle
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--eid', type=int, default=-1)
     parser.add_argument('--gpu_id', type=int, nargs='+', default=0)
     parser.add_argument('--yaml_file', type=str, default='configs/demo/mini/5way_5shot.yaml')
+
     outside_opts = parser.parse_args()
+
+    experiment_name = outside_opts.yaml_file.split("/")[-1].split(".")[0]
+
     if isinstance(outside_opts.gpu_id, int):
         outside_opts.gpu_id = [outside_opts.gpu_id]  # int -> list
 
@@ -27,14 +29,14 @@ def main():
     }
     opts = Config(config['options']['ctrl.yaml_file'], config['options'])
     opts.setup()
-
+    print("-"*100)
     # DATA
     meta_test = None
     train_db_list, val_db_list, _, _ = data_loader(opts)
 
     # MODEL
     net = CTMNet(opts).to(opts.ctrl.device)
-    checkpoints = torch.load(opts.io.model_file)
+    checkpoints = torch.load(opts.io.model_file, map_location=torch.device('cpu'))
 
     net.load_state_dict(checkpoints['state_dict'])
     _last_epoch = checkpoints['epoch']
@@ -63,11 +65,8 @@ def main():
 
     which_ind = 0
     curr_shot = opts.fsl.k_shot[0]
-    curr_query = opts.fsl.k_query[0]  # only for display (for evolutionary train)
-    train_db = train_db_list[0]
     val_db = val_db_list[0]
-    total_iter = opts.ctrl.total_iter_train[0]
-    eval_length = opts.ctrl.total_iter_val[0]
+    eval_length = 50  # opts.ctrl.total_iter_val[0]
 
     # OPTIM AND LR SCHEDULE
     if opts.train.optim == 'adam':
@@ -79,14 +78,9 @@ def main():
         optimizer = optim.RMSprop(
             net.parameters(), lr=opts.train.lr, weight_decay=opts.train.weight_decay, momentum=opts.train.momentum,
             alpha=0.9, centered=True)
-    if opts.train.lr_policy == 'multi_step':
-        scheduler = MultiStepLR(optimizer, milestones=opts.train.lr_scheduler, gamma=opts.train.lr_gamma)
-    elif opts.train.lr_policy == 'exp':
-        scheduler = ExponentialLR(optimizer, gamma=opts.train.lr_gamma)
     if opts.model.structure == 'original':
         # ignore previous setting
         optimizer = optim.Adam(net.parameters(), lr=0.001)
-        scheduler = StepLR(optimizer, step_size=100, gamma=0.5)
         opts.train.lr_policy = 'step'
         opts.train.step_size = 100 if not opts.data.use_ori_relation else 3
         opts.train.lr_scheduler = [-1]
@@ -94,9 +88,12 @@ def main():
         opts.train.lr_gamma = 0.5
         opts.train.weight_decay = .0
 
-    accuracy = test_model(net, val_db, eval_length, opts, which_ind, curr_shot, optimizer, meta_test)
+    accuracy, support_embeddings_lst = test_model2(net, val_db, eval_length, opts, which_ind, curr_shot, optimizer, meta_test)
+
+    pickle.dump(support_embeddings_lst, open("{}_sup_embs.pkl".format(experiment_name), "wb"))
 
     print("accuracy is", accuracy)
+
 
 if __name__ == '__main__':
     main()

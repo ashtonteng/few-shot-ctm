@@ -110,6 +110,9 @@ class miniImagenet(Dataset):
 
             # 1. select n_way classes randomly
             selected_cls = np.random.choice(self.cls_num, self.n_way, False)  # no duplicate
+
+            # selected_cls = np.random.choice(self.n_way, self.n_way, False)  # no duplicate ## FOR TSNE
+
             support_x, query_x = [], []
 
             # 2. select k_shot + k_query for each class

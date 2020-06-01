@@ -193,7 +193,7 @@ def feat_extract(pretrained=False, **kwargs):
     else:
         raise NameError('structure not known {} ...'.format(kwargs['structure']))
     if pretrained:
-        logger('Using pre-trained model from pytorch official webiste, {:s}'.format(kwargs['structure']))
+        logger('Using pre-trained model from pytorch official website, {:s}'.format(kwargs['structure']))
         model.load_state_dict(model_zoo.load_url(model_urls[kwargs['structure']]), strict=False)
     return model
 
@@ -597,7 +597,7 @@ class CTMNet(nn.Module):
             if not self.delete_mp:
                 if not self.mp_mean:
                     support_xf_reshape = support_xf_ori.view(n_way, -1, support_xf_ori.size(2), support_xf_ori.size(3))
-                else:
+                else: ## here
                     support_xf_reshape = support_xf_ori
                 mp = self.main_component(support_xf_reshape)                # 5(n_way), 64, 3, 3
                 if self.mp_mean:
@@ -613,7 +613,7 @@ class CTMNet(nn.Module):
                 mp_modified = torch.matmul(mp, P)                           # 5, 64, 3, 3
 
             if self.dnet_supp_manner == '1':
-                v = self.reshaper(support_xf_ori)
+                v = self.reshaper(support_xf_ori)  # reshape support and mask with P
                 v = torch.matmul(v, P)
             elif self.dnet_supp_manner == '2':
                 v = self.reshaper(support_xf_ori)                           # 25, 64, 3, 3
@@ -722,7 +722,7 @@ class CTMNet(nn.Module):
                 prediction = both.argmax(dim=-1)
 
             correct = torch.eq(prediction, target).sum().unsqueeze(0)
-            return prediction, correct
+            return prediction, correct, v
 
     def _renew_network(self, support_x, query_x, init_mp_modified, init_v, target_support, optimizer):
 

@@ -18,7 +18,7 @@ class Config(object):
     model = AttrDict()
     model.structure = 'resnet40'  # 19, 52, 34, shallow
     model.sum_supp_sample = False
-    model.resnet_pretrain = False
+    model.resnet_pretrain = True # False
     model.relation_net = 'res_block'  # this is default. other choice: 'simple'
 
     # ==============
@@ -111,7 +111,7 @@ class Config(object):
     ctrl.start_epoch = 0
     ctrl.start_iter = 0
     # pretrain resnet on mini-imagent or tier-imagenet
-    ctrl.pretrain = False
+    ctrl.pretrain = True # False
 
     # ==============
     train = AttrDict()

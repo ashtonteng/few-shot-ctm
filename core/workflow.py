@@ -32,7 +32,7 @@ def process_input(batch, opts, mode='train'):
             support_x.unsqueeze(0), support_y.unsqueeze(0), \
             query_x.unsqueeze(0), query_y.unsqueeze(0)
 
-    else:
+    else:  # this is run
         # support_x: support_sz, 3, 84, 84
         support_x, support_y, query_x, query_y = \
             batch[0].to(opts.ctrl.device), batch[1].to(opts.ctrl.device), \
@@ -40,6 +40,39 @@ def process_input(batch, opts, mode='train'):
 
     return support_x, support_y, query_x, query_y
 
+
+def test_model2(net, input_db, eval_length, opts, which_ind, curr_shot, optimizer=None, meta_test=None):
+    """
+    optimizer is for meta-test only
+    meta_test is for using the dataloader in the original relation codebase. Not the same meaning as "meta_learn"
+    """
+    total_correct, total_num, display_onebatch = \
+        torch.zeros(1).to(opts.ctrl.device), torch.zeros(1).to(opts.ctrl.device), False
+
+    net.eval()
+
+    support_embeddings_lst = []
+
+    with torch.no_grad():
+        for j, batch_test in enumerate(input_db): ## 600 test inputs
+
+            if j >= eval_length:
+                break
+
+            support_x, support_y, query_x, query_y = process_input(batch_test, opts, mode='test')
+
+            # if opts.fsl.ctm:
+            _, correct, support_embeddings = net.forward_CTM(support_x, support_y, query_x, query_y, False)
+
+            support_embeddings_lst.append((support_embeddings.numpy(), support_y.numpy()))
+
+            total_correct += correct.sum().float()  # multi-gpu support
+            total_num += query_y.numel()
+
+    accuracy = total_correct / total_num        # due to python 2, it's converted to int!
+    accuracy = accuracy.item()
+    net.train()
+    return accuracy, support_embeddings_lst
 
 def test_model(net, input_db, eval_length, opts, which_ind, curr_shot, optimizer=None, meta_test=None):
     """

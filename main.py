@@ -3,7 +3,7 @@ import argparse
 from torch import optim
 from torch.optim.lr_scheduler import MultiStepLR, ExponentialLR, StepLR
 
-from core.model_combined import CTMNet
+from core.model import CTMNet
 from dataset.data_loader import data_loader
 from tools.general_utils import *
 from tools.visualize import Visualizer
@@ -15,7 +15,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--eid', type=int, default=-1)
     parser.add_argument('--gpu_id', type=int, nargs='+', default=0)
-    parser.add_argument('--yaml_file', type=str, default='configs/demo/mini/20way_1shot.yaml')
+    parser.add_argument('--yaml_file', type=str, default='configs/demo/mini/5way_5shot_resnet.yaml')
     outside_opts = parser.parse_args()
     if isinstance(outside_opts.gpu_id, int):
         outside_opts.gpu_id = [outside_opts.gpu_id]  # int -> list

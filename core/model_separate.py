@@ -765,7 +765,7 @@ class CTMNet(nn.Module):
                 prediction = both.argmax(dim=-1)
 
             correct = torch.eq(prediction, target).sum().unsqueeze(0)
-            return prediction, correct
+            return prediction, correct, v
 
     def _renew_network(self, support_x, query_x, init_mp_modified, init_v, target_support, optimizer):
 

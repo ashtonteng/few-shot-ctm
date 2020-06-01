@@ -305,10 +305,9 @@ class CTMNet(nn.Module):
                     self.reshaper = self._make_layer(Bottleneck, out_size, 4, stride=1, name="reshaper")
                 _out_downsample = self.reshaper(_embedding)
 
-
             # CONCENTRATOR AND PROJECTOR
             if self.dnet:
-                if self.mp_mean:
+                if self.mp_mean: ## mp = main_component
                     self.inplanes = _embedding.size(1)
                 else:
                     # concatenate along the channel for all samples in each class
@@ -319,7 +318,12 @@ class CTMNet(nn.Module):
                         self._make_layer(Bottleneck, out_size, 2, stride=1)
                     )
                 else:
-                    self.main_component = self._make_layer(Bottleneck, out_size, 4, stride=1)
+                    print("-----------------CONCENTRATOR-----------------")
+                    tmp_inplanes = self.inplanes
+                    self.main_component1 = self._make_layer(Bottleneck, out_size, 4, stride=1, name="concentrator2", change_inplanes=True)
+                    self.inplanes = tmp_inplanes
+                    self.main_component2 = self._make_layer(Bottleneck, out_size, 4, stride=1, name="concentrator1", change_inplanes=True)
+
 
                 # projector
                 if self.delete_mp: ## mp = main_component
@@ -338,10 +342,7 @@ class CTMNet(nn.Module):
                     )
                 else:
                     print("-----------------PROJECTOR-----------------")
-                    tmp_inplanes = self.inplanes
-                    self.projection1 = self._make_layer(Bottleneck, out_size, 4, stride=1, name="projector1")
-                    self.inplanes = tmp_inplanes
-                    self.projection2 = self._make_layer(Bottleneck, out_size, 4, stride=1, name="projector2")
+                    self.projection = self._make_layer(Bottleneck, out_size, 4, stride=1, name="projector1")
 
                 # deprecated; kept for legacy
                 if self.use_discri_loss:
@@ -618,7 +619,15 @@ class CTMNet(nn.Module):
                     support_xf_reshape = support_xf_ori
 
                     ###################
-                mp = self.main_component(support_xf_reshape)                # 5(n_way), 64, 3, 3
+
+                ## mp = main component, concentrator
+                mp1 = self.main_component1(support_xf_reshape)                # 5(n_way), 64, 3, 3
+                mp2 = self.main_component2(support_xf_reshape)
+
+                if torch.sum(mp1) > torch.sum(mp2):
+                    mp = mp1
+                else:
+                    mp = mp2
                     ####################
 
                 if self.mp_mean:
@@ -628,17 +637,7 @@ class CTMNet(nn.Module):
                 _input_P = support_xf_ori.view(1, -1, support_xf_ori.size(2), support_xf_ori.size(3))
 
             # for P: consider all components
-            ###############################
-            # P = self.projection(_input_P)                                   # 1, 64, 3, 3
-
-            P1 = self.projection1(_input_P)
-            P2 = self.projection2(_input_P)
-
-            if torch.sum(P1) > torch.sum(P2):
-                P = P1
-            else:
-                P = P2
-            ###############################
+            P = self.projection(_input_P)                                   # 1, 64, 3, 3
             P = F.softmax(P, dim=1)
             if self.dnet_supp_manner == '2' or self.dnet_supp_manner == '3' or self.use_discri_loss:
                 mp_modified = torch.matmul(mp, P)                           # 5, 64, 3, 3
@@ -803,10 +802,19 @@ class CTMNet(nn.Module):
                     support_xf_reshape = support_xf_ori.view(n_way, -1, support_xf_ori.size(2), support_xf_ori.size(3))
                 else:
                     support_xf_reshape = support_xf_ori
+                # mp = self.main_component(support_xf_reshape)  # 5(n_way), 64, 3, 3
+
 
                 ###################
 
-                mp = self.main_component(support_xf_reshape)                # 5(n_way), 64, 3, 3
+                ## mp = main component, concentrator
+                mp1 = self.main_component1(support_xf_reshape)                # 5(n_way), 64, 3, 3
+                mp2 = self.main_component2(support_xf_reshape)
+
+                if torch.sum(mp1) > torch.sum(mp2):
+                    mp = mp1
+                else:
+                    mp = mp2
 
                 ####################
 
@@ -818,18 +826,7 @@ class CTMNet(nn.Module):
                 _input_P = support_xf_ori.view(1, -1, support_xf_ori.size(2), support_xf_ori.size(3))
 
             # for P: consider all components
-            ###############################
-            # P = self.projection(_input_P)                                   # 1, 64, 3, 3
-
-            P1 = self.projection1(_input_P)
-            P2 = self.projection2(_input_P)
-
-            if torch.sum(P1) > torch.sum(P2):
-                P = P1
-            else:
-                P = P2
-            ###############################
-
+            P = self.projection(_input_P)                                   # 1, 64, 3, 3
             P = F.softmax(P, dim=1)
             mp_modified = torch.matmul(mp, P)  # 5, 64, 3, 3
 
