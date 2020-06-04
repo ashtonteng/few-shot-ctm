@@ -120,50 +120,6 @@ class Bottleneck(nn.Module):
 
         return out
 
-class Bottleneck_k5(nn.Module):
-    expansion = 4
-
-    def __init__(self, inplanes, planes, stride=1, downsample=None, name=None):
-        print("Bottleneck init")
-
-        super(Bottleneck_k5, self).__init__()
-        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=5, stride=stride,
-                               padding=2, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
-        self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm2d(planes * 4)
-        self.relu = nn.ReLU(inplace=True)
-        self.downsample = downsample
-        self.stride = stride
-
-        self.name = name
-
-    def forward(self, x):
-
-        residual = x
-
-        # print("self.name", self.name, "residual.size()", residual.size())
-
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-
-        out = self.conv2(out)
-        out = self.bn2(out)
-        out = self.relu(out)
-
-        out = self.conv3(out)
-        out = self.bn3(out)
-
-        if self.downsample is not None:
-            residual = self.downsample(x)
-
-        out += residual
-        out = self.relu(out)
-
-        return out
 
 class ResNet(nn.Module):
     def __init__(self, block, layers, in_c):
@@ -363,10 +319,10 @@ class CTMNet(nn.Module):
                     )
                 else:
                     print("-----------------CONCENTRATOR-----------------")
-                    tmp_inplaces = self.inplanes
+                    tmp_inplanes = self.inplanes
                     self.main_component1 = self._make_layer(Bottleneck, out_size, 4, stride=1, name="concentrator2", change_inplanes=True)
-                    self.inplanes = tmp_inplaces
-                    self.main_component2 = self._make_layer(Bottleneck_k5, out_size, 4, stride=1, name="concentrator1", change_inplanes=True)
+                    self.inplanes = tmp_inplanes
+                    self.main_component2 = self._make_layer(Bottleneck, out_size, 4, stride=1, name="concentrator1", change_inplanes=True)
 
 
                 # projector
@@ -386,7 +342,10 @@ class CTMNet(nn.Module):
                     )
                 else:
                     print("-----------------PROJECTOR-----------------")
-                    self.projection = self._make_layer(Bottleneck, out_size, 4, stride=1, name="projector")
+                    tmp_inplanes = self.inplanes
+                    self.projection1 = self._make_layer(Bottleneck, out_size, 4, stride=1, name="projector1")
+                    self.inplanes = tmp_inplanes
+                    self.projection2 = self._make_layer(Bottleneck, out_size, 4, stride=1, name="projector2")
 
                 # deprecated; kept for legacy
                 if self.use_discri_loss:
@@ -656,32 +615,41 @@ class CTMNet(nn.Module):
         query_xf_ori = self.repnet(query_x.view(batch_sz*query_sz, -1, _d, _d))
 
         if self.dnet:
-            if not self.delete_mp:
+            if not self.delete_mp: ## use concentrator
                 if not self.mp_mean:
                     support_xf_reshape = support_xf_ori.view(n_way, -1, support_xf_ori.size(2), support_xf_ori.size(3))
                 else:
                     support_xf_reshape = support_xf_ori
 
-                    ###################
+                ###################
 
                 ## mp = main component, concentrator
                 mp1 = self.main_component1(support_xf_reshape)                # 5(n_way), 64, 3, 3
                 mp2 = self.main_component2(support_xf_reshape)
 
-                if torch.sum(mp1) > torch.sum(mp2):
-                    mp = mp1
-                else:
-                    mp = mp2
-                    ####################
-
                 if self.mp_mean:
-                    mp = torch.mean(mp.view(n_way, k_shot, mp.size(1), mp.size(2), mp.size(2)), dim=1, keepdim=False)
-                _input_P = mp.view(1, -1, mp.size(2), mp.size(3))           # mp -> 1, 5*64, 3, 3
-            else:
+                    mp1 = torch.mean(mp1.view(n_way, k_shot, mp1.size(1), mp1.size(2), mp1.size(2)), dim=1, keepdim=False)
+                    mp2 = torch.mean(mp2.view(n_way, k_shot, mp2.size(1), mp2.size(2), mp2.size(2)), dim=1, keepdim=False)
+
+                _input_P1 = mp1.view(1, -1, mp1.size(2), mp1.size(3))           # mp -> 1, 5*64, 3, 3
+                _input_P2 = mp2.view(1, -1, mp2.size(2), mp2.size(3))  # mp -> 1, 5*64, 3, 3
+                ####################
+
+            else: ## not run
                 _input_P = support_xf_ori.view(1, -1, support_xf_ori.size(2), support_xf_ori.size(3))
 
             # for P: consider all components
-            P = self.projection(_input_P)                                   # 1, 64, 3, 3
+            ###############################
+            # P = self.projection(_input_P)                                   # 1, 64, 3, 3
+
+            P1 = self.projection1(_input_P1)
+            P2 = self.projection2(_input_P2)
+
+            if torch.sum(P1) > torch.sum(P2):
+                P = P1
+            else:
+                P = P2
+            ###############################
             P = F.softmax(P, dim=1)
             if self.dnet_supp_manner == '2' or self.dnet_supp_manner == '3' or self.use_discri_loss:
                 mp_modified = torch.matmul(mp, P)                           # 5, 64, 3, 3
@@ -772,13 +740,9 @@ class CTMNet(nn.Module):
             sinkhorn_loss = zero
 
             total_loss = loss + sinkhorn_loss + loss_discri
-           # return total_loss[0]
             return torch.cat([total_loss, loss, sinkhorn_loss, loss_discri]).unsqueeze(0), disc_weights
-
         else:
             # TEST
-            # print ('test')
-            # print (self.use_discri_loss)
             if self.dnet and self.use_discri_loss and self.discri_test_update:
                 score = self._renew_network(
                     support_x.view(batch_sz * support_sz, -1, _d, _d),
@@ -853,7 +817,7 @@ class CTMNet(nn.Module):
                 # mp = self.main_component(support_xf_reshape)  # 5(n_way), 64, 3, 3
 
 
-                    ###################
+                ###################
 
                 ## mp = main component, concentrator
                 mp1 = self.main_component1(support_xf_reshape)                # 5(n_way), 64, 3, 3
@@ -864,7 +828,7 @@ class CTMNet(nn.Module):
                 else:
                     mp = mp2
 
-                    ####################
+                ####################
 
 
                 if self.mp_mean:
@@ -874,7 +838,18 @@ class CTMNet(nn.Module):
                 _input_P = support_xf_ori.view(1, -1, support_xf_ori.size(2), support_xf_ori.size(3))
 
             # for P: consider all components
-            P = self.projection(_input_P)  # 1, 64, 3, 3
+            ###############################
+            # P = self.projection(_input_P)                                   # 1, 64, 3, 3
+
+            P1 = self.projection1(_input_P)
+            P2 = self.projection2(_input_P)
+
+            if torch.sum(P1) > torch.sum(P2):
+                P = P1
+            else:
+                P = P2
+            ###############################
+
             P = F.softmax(P, dim=1)
             mp_modified = torch.matmul(mp, P)  # 5, 64, 3, 3
 
@@ -975,3 +950,4 @@ class CTMNet(nn.Module):
         # sum up here
         score = torch.sum(score, dim=2, keepdim=False)
         return score
+
