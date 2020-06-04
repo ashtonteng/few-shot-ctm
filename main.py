@@ -3,7 +3,7 @@ import argparse
 from torch import optim
 from torch.optim.lr_scheduler import MultiStepLR, ExponentialLR, StepLR
 
-from core.model import CTMNet
+from core.model_combined import CTMNet
 from dataset.data_loader import data_loader
 from tools.general_utils import *
 from tools.visualize import Visualizer
@@ -114,14 +114,6 @@ def main():
             opts.logger('Changing a new set of data at new epoch ...')
             train_db_list, val_db_list, _, _ = data_loader(opts)
 
-        # adjust learning rate
-        old_lr = optimizer.param_groups[0]['lr']
-        scheduler.step(epoch)
-        new_lr = optimizer.param_groups[0]['lr']
-        if epoch == opts.ctrl.start_epoch:
-            opts.logger('Start lr is {:.8f}, at epoch {}\n'.format(old_lr, epoch))
-        if new_lr != old_lr:
-            opts.logger('LR changes from {:.8f} to {:.8f} at epoch {:d}\n'.format(old_lr, new_lr, epoch))
 
         # select proper train_db (legacy reason)
         which_ind = 0
@@ -200,12 +192,21 @@ def main():
                     'meta_test': meta_test
                 }
                 try:
-                    stats = run_test(opts, val_db, net, vis, **arguments)
+                    stats = run_test(opts, val_db, net, vis=None, **arguments)
                 except RuntimeError:
                     vis.show_dynamic_info(phase='error')
                 if sum(stats) != -1:
                     best_accuracy, last_epoch, last_iter = stats[0], stats[1], stats[2]
             # DONE with validation process
+
+        # adjust learning rate
+        old_lr = optimizer.param_groups[0]['lr']
+        scheduler.step(epoch)
+        new_lr = optimizer.param_groups[0]['lr']
+        if epoch == opts.ctrl.start_epoch:
+            opts.logger('Start lr is {:.8f}, at epoch {}\n'.format(old_lr, epoch))
+        if new_lr != old_lr:
+            opts.logger('LR changes from {:.8f} to {:.8f} at epoch {:d}\n'.format(old_lr, new_lr, epoch))
 
     opts.logger('')
     opts.logger('Training done! check your work using:')
