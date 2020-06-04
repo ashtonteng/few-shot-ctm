@@ -81,7 +81,7 @@ def test_model(net, input_db, eval_length, opts, which_ind, curr_shot, optimizer
 
     elif opts.fsl.ctm and hasattr(opts.ctmnet, 'use_discri_loss') and \
             opts.ctmnet.use_discri_loss and opts.ctmnet.discri_test_update:
-
+        
         for j, batch_test in enumerate(input_db):
 
             if j >= eval_length:
@@ -106,7 +106,9 @@ def test_model(net, input_db, eval_length, opts, which_ind, curr_shot, optimizer
                 support_x, support_y, query_x, query_y = process_input(batch_test, opts, mode='test')
 
                 if opts.fsl.ctm:
-                    _, correct = net.forward_CTM(support_x, support_y, query_x, query_y, False)
+                    ## it is here!!
+                     _, correct = net.forward_CTM(support_x, support_y, query_x, query_y, False)
+                    #loss=net.forward_CTM(support_x,support_y,query_x,query_y,True)
                 else:
                     if opts.model.structure == 'original':
                         support_x, support_y, query_x, query_y = \
@@ -122,6 +124,7 @@ def test_model(net, input_db, eval_length, opts, which_ind, curr_shot, optimizer
         accuracy = total_correct / total_num        # due to python 2, it's converted to int!
         accuracy = accuracy.item()
         net.train()
+    #return loss
     return accuracy
 
 
